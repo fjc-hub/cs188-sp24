@@ -20,6 +20,7 @@ Pacman agents (in searchAgents.py).
 import util
 from game import Directions
 from typing import List
+from util import Queue, PriorityQueue
 
 class SearchProblem:
     """
@@ -90,17 +91,104 @@ def depthFirstSearch(problem: SearchProblem) -> List[Directions]:
     print("Start's successors:", problem.getSuccessors(problem.getStartState()))
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    actions = []
+    isVis = {}
+    def dfs(node):
+        nonlocal actions, isVis
+        if problem.isGoalState(node):
+            return node
+        isVis[node] = True
+        for lst in problem.getSuccessors(node):
+            suc = lst[0]
+            act = lst[1]
+            if suc in isVis:
+                continue
+            actions += [act]
+            target = dfs(suc)
+            if target != None:
+                return target
+            actions = actions[:len(actions)-1]
+        isVis[node] = False
+        return None
+    
+    goal = dfs(problem.getStartState())
+    if goal == None: # Goal not found
+        return []
+    # Goal exists
+    return actions
+
 
 def breadthFirstSearch(problem: SearchProblem) -> List[Directions]:
     """Search the shallowest nodes in the search tree first."""
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    start, goal = problem.getStartState(), None
+    isQueued = {start: True}
+    edge = {}
+    queue = Queue()
+    queue.push(start)
+    while not queue.isEmpty():
+        node = queue.pop()
+        if problem.isGoalState(node):
+            goal = node
+            break
+        for lst in problem.getSuccessors(node):
+            suc = lst[0]
+            act = lst[1]
+            if suc in isQueued:
+                continue
+            isQueued[suc] = True
+            if suc not in edge:
+                edge[suc] = [node, act]  # record the first preceded node
+            queue.push(suc)
+    
+    if goal is None:
+        return []
+    # reconstruct optimal path backforward
+    ret = []
+    while goal in edge:
+        ret = [edge[goal][1]] + ret
+        goal = edge[goal][0]
+    return ret
 
 def uniformCostSearch(problem: SearchProblem) -> List[Directions]:
     """Search the node of least total cost first."""
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    start, goal = problem.getStartState(), None
+    # isExpand = {} # record if node has been popped by pq. no need, positive circle path works
+    edges = {}
+    costs = {start: 0}
+    pq = PriorityQueue()
+    pq.update(start, 0)
+    while not pq.isEmpty():
+        node = pq.pop()
+        cost = costs[node]
+        if problem.isGoalState(node):
+            goal = node
+            break
+        # if node in isExpand:
+        #     continue
+        # isExpand[node] = True
+        for lst in problem.getSuccessors(node):
+            succes = lst[0]
+            action = lst[1]
+            weight = lst[2]
+            if (succes not in costs) or (cost + weight < costs[succes]):
+                costs[succes] = cost + weight
+                edges[succes] = [node, action]  # record the lowest cost preceded node
+                pq.update(succes, cost + weight)
+
+    # reconstruct optimal path backforward
+    return reconstruct(edges, goal)
+
+# backtrack from end, to construct a path
+def reconstruct(edges: dict, end):
+    if end is None:
+        return []
+    ret = []
+    while end in edges:
+        ret = [edges[end][1]] + ret
+        end = edges[end][0]
+    return ret
 
 def nullHeuristic(state, problem=None) -> float:
     """
@@ -112,7 +200,28 @@ def nullHeuristic(state, problem=None) -> float:
 def aStarSearch(problem: SearchProblem, heuristic=nullHeuristic) -> List[Directions]:
     """Search the node that has the lowest combined cost and heuristic first."""
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    start, goal = problem.getStartState(), None
+    edges = {}
+    costs = {start: 0}
+    pq = PriorityQueue()
+    pq.update(start, 0)
+    while not pq.isEmpty():
+        node = pq.pop()
+        cost = costs[node]
+        if problem.isGoalState(node):
+            goal = node
+            break
+        for lst in problem.getSuccessors(node):
+            succes = lst[0]
+            action = lst[1]
+            weight = lst[2]
+            if (succes not in costs) or (cost + weight < costs[succes]):
+                costs[succes] = cost + weight
+                edges[succes] = [node, action]  # record the lowest cost preceded node
+                pq.update(succes, costs[succes] + heuristic(succes, problem))
+
+    # reconstruct optimal path backforward
+    return reconstruct(edges, goal)
 
 # Abbreviations
 bfs = breadthFirstSearch

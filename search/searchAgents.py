@@ -42,6 +42,7 @@ import util
 import time
 import search
 import pacman
+from util import Queue, manhattanDistance, PriorityQueue
 
 class GoWestAgent(Agent):
     "An agent that goes West until it can't."
@@ -270,6 +271,26 @@ def euclideanHeuristic(position, problem, info={}):
 # This portion is incomplete.  Time to write code!  #
 #####################################################
 
+class CornersProblemState:
+    def __init__(self, position, foods):
+        self.position = position # (x, y)
+        self.foods = sorted(foods) # foods' position
+    
+    def __hash__(self):
+        return hash(f"{self.position}/{self.foods}")
+    
+    def __eq__(self, other):
+        return self.position == other.position and self.foods == other.foods
+    
+    def hasFood(self):
+        return len(self.foods) == 0
+    
+    def getPosition(self):
+        return self.position
+    
+    def getFoods(self):
+        return self.foods
+
 class CornersProblem(search.SearchProblem):
     """
     This search problem finds paths through all four corners of a layout.
@@ -296,16 +317,16 @@ class CornersProblem(search.SearchProblem):
         space)
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return CornersProblemState(self.startingPosition, self.corners)
 
-    def isGoalState(self, state: Any):
+    def isGoalState(self, state: CornersProblemState):
         """
         Returns whether this search state is a goal state of the problem.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return state.hasFood()
 
-    def getSuccessors(self, state: Any):
+    def getSuccessors(self, state: CornersProblemState):
         """
         Returns successor states, the actions they require, and a cost of 1.
 
@@ -326,6 +347,24 @@ class CornersProblem(search.SearchProblem):
             #   hitsWall = self.walls[nextx][nexty]
 
             "*** YOUR CODE HERE ***"
+            x,y = state.getPosition()
+            foods = state.getFoods()
+            dx, dy = Actions.directionToVector(action)
+            nextx, nexty = int(x + dx), int(y + dy)
+            hitsWall = self.walls[nextx][nexty]
+            if hitsWall:
+                continue
+            
+            # check if pacman can eat food in corner
+            newFoods = []
+            for a, b in foods:
+                if a != nextx or b != nexty:
+                    newFoods.append((a, b))
+            
+            if len(newFoods) < len(foods) and len(foods) == 1:
+                print(len(foods), " -> ", len(newFoods))
+            newState = CornersProblemState((nextx, nexty), newFoods)
+            successors.append((newState, action, 1))
 
         self._expanded += 1 # DO NOT CHANGE
         return successors
@@ -344,6 +383,16 @@ class CornersProblem(search.SearchProblem):
         return len(actions)
 
 
+def getDis(pos0, pos1):
+    return abs(pos0[0]-pos1[0]) + abs(pos0[1]-pos1[1])
+
+def minDis(pos, nodes):
+    m, i = 0, -1
+    for idx, node in enumerate(nodes):
+        t = getDis(pos, node)
+        if i == -1 or t < m:
+            m, i = t, idx
+    return m, i
 
 def cornersHeuristic(state: Any, problem: CornersProblem):
     """
@@ -362,8 +411,17 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
     walls = problem.walls # These are the walls of the maze, as a Grid (game.py)
 
     "*** YOUR CODE HERE ***"
-    return 0 # Default to trivial solution
-
+    heuristic = 0
+    pos = state.getPosition()
+    tmp = state.getFoods() # foods construct a square in grid, sorted
+    foods = tmp[:]  # IMPORTANT: Deep Copy!
+    for _ in range(len(foods)):
+        m, i = minDis(pos, foods)
+        pos = foods[i]
+        heuristic += m
+        del foods[i]
+    
+    return heuristic
 
 
 class AStarCornersAgent(SearchAgent):
@@ -428,6 +486,53 @@ class AStarFoodSearchAgent(SearchAgent):
         self.searchFunction = lambda prob: search.aStarSearch(prob, foodHeuristic)
         self.searchType = FoodSearchProblem
 
+# trivial implementation of Prim Algorithm for MST(minimum spanning tree)
+def trivialPrim(nodes):
+    if not nodes:
+        return 0
+    total = 0
+    mst = set()         # nodes in current minimum spanning tree
+    cut = set(nodes)    # a cut contains all nodes outside MST
+    mst.add(cut.pop())
+    while len(cut) > 0:
+        # get minimum costed edge between two unconnected Cut
+        m, t = float('inf'), -1
+        for x in mst:
+            for y in cut:
+                d = manhattanDistance(x, y)
+                if d < m:
+                    m, t = d, y
+        total += m
+        mst.add(t)
+        cut.remove(t)
+    return total
+
+# lazy implementation of Prim Algorithm for MST
+def lazyPrim(nodes):
+    if not nodes:
+        return 0
+    total = 0
+    sz = len(nodes)             # size of entire mst
+    mst = set()                 # contains all nodes in current partial MST
+    pq = PriorityQueue()        # used to accelerate the process that finds mini-cost edge, like Dijkstra
+    pq.push((nodes[0], 0), 0)   # contains all nodes connected MST but not in MST, for getting min costed node
+
+    while len(mst) < sz:
+        # get the node such that MST grows by one node with minimum cost, Greedy!!!
+        node, cost = pq.pop()
+        if node in mst:
+            continue
+        mst.add(node)
+        total += cost
+        for next in nodes:
+            if next in mst:
+                continue
+            cost = manhattanDistance(node, next)
+            pq.push((next, cost), cost)
+    
+    return total
+
+
 def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
     Your heuristic for the FoodSearchProblem goes here.
@@ -453,7 +558,21 @@ def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
     position, foodGrid = state
     "*** YOUR CODE HERE ***"
-    return 0
+    heuristic = 0
+    foods = foodGrid.asList()
+    if not foods:
+        return 0
+
+    # Calculate the MST cost for the food dots
+    # mst_cost_foods = trivialPrim(foods)
+    mst_cost_foods = lazyPrim(foods)
+
+    # Calculate the minimum distance from Pacman's position to any food dot
+    min_distance_to_food = min(manhattanDistance(position, food) for food in foods)
+
+    heuristic = min_distance_to_food + mst_cost_foods
+
+    return heuristic
 
 
 class ClosestDotSearchAgent(SearchAgent):
@@ -485,7 +604,39 @@ class ClosestDotSearchAgent(SearchAgent):
         problem = AnyFoodSearchProblem(gameState)
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        if problem.isGoalState(startPosition):
+            return []
+        
+        edgeTo = {} # edgeTo[v]=w represents w is the first node that connects v
+
+        # bfs search
+        queue = [startPosition]
+        vis = set()
+        vis.add(startPosition)
+        while len(queue) > 0:
+            sz = len(queue)
+            for i in range(sz):
+                node = queue[i]
+                for next in Actions.getLegalNeighbors(node, walls):
+                    if next in vis:
+                        continue
+                    vis.add(next)
+                    edgeTo[next] = node
+                    if problem.isGoalState(next):
+                        return reconstructPath(edgeTo, next)
+                    queue += [next]
+            queue = queue[sz:]
+        return []
+    
+def reconstructPath(edgeTo, goal):
+    path = []
+    node = goal
+    while node in edgeTo:
+        prev = edgeTo[node]
+        action = Actions.vectorToDirection((prev[0] - node[0], prev[1] - node[1]))
+        path = [action] + path
+        node = prev
+    return path
 
 class AnyFoodSearchProblem(PositionSearchProblem):
     """
@@ -521,7 +672,10 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         x,y = state
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        for a, b in self.food.asList():
+            if a == x and b == y:
+                return True
+        return False
 
 def mazeDistance(point1: Tuple[int, int], point2: Tuple[int, int], gameState: pacman.GameState) -> int:
     """

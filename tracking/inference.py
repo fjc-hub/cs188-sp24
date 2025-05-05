@@ -61,7 +61,13 @@ def constructBayesNet(gameState: hunters.GameState):
     variableDomainsDict = {}
 
     "*** YOUR CODE HERE ***"
-    raiseNotDefined()
+    variables = [PAC,GHOST0,GHOST1,OBS0,OBS1]
+    edges = [(PAC,OBS0), (PAC,OBS1), (GHOST0,OBS0), (GHOST1,OBS1)]
+    for var in [PAC, GHOST0, GHOST1]:
+        variableDomainsDict[var] = [(x, y) for x in range(X_RANGE) for y in range(Y_RANGE)]
+    maxDist = X_RANGE + Y_RANGE - 2 + MAX_NOISE
+    for var in [OBS0, OBS1]:
+        variableDomainsDict[var] = [x for x in range(0, maxDist+1)]
     "*** END YOUR CODE HERE ***"
 
     net = bn.constructEmptyBayesNet(variables, edges, variableDomainsDict)
@@ -182,7 +188,22 @@ def inferenceByVariableEliminationWithCallTracking(callTrackingList=None):
             eliminationOrder = sorted(list(eliminationVariables))
 
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        currentFactorsList = bayesNet.getAllCPTsWithEvidence(evidenceDict)
+        for var in eliminationOrder:
+            # join by var
+            currentFactorsList, joinedFactor = joinFactorsByVariable(currentFactorsList, var)
+            # eliminate var
+            if len(joinedFactor.unconditionedVariables()) == 1:
+                continue
+            newFactor = eliminate(joinedFactor, var)
+            # save new factor 
+            currentFactorsList.append(newFactor)
+
+        retFactor = joinFactors(currentFactorsList)
+
+        # normalize
+        return normalize(retFactor)
+
         "*** END YOUR CODE HERE ***"
 
 
@@ -323,7 +344,19 @@ class DiscreteDistribution(dict):
         {}
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        total = self.total()
+        if total == 0:
+            return None
+        for k in self:
+            self[k] = self[k] / total
+        
+        lst = [0]
+        tmp = []
+        for t in self.items():
+            lst.append((lst[len(lst)-1] if len(lst) > 0 else 0) + t[1])
+            tmp.append(t[0])
+        self.__distribution = lst
+        self.__selectkey = tmp
         "*** END YOUR CODE HERE ***"
 
     def sample(self):
@@ -348,7 +381,33 @@ class DiscreteDistribution(dict):
         0.0
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        # binary search, return the min index of the max value that less than or equal val
+        # 0, 0.4, 0.6, 1, 1
+        def binarysearch(lst, val):
+            if len(lst) == 0:
+                return -1
+            if val < lst[0]:
+                return -1
+            l, r = 0, len(lst)-1
+            while l < r:
+                m = l + ((r - l + 1) >> 1)
+                if lst[m] == val:
+                    # return m  may be some same elements
+                    if m - 1 >= 0 and lst[m-1] == val:
+                        r = m - 1
+                    else:
+                        return m
+                elif lst[m] < val:
+                    l = m
+                else:
+                    r = m - 1
+            return l
+        
+        self.normalize()
+        idx = binarysearch(self.__distribution, random.random())
+        if idx < 0 or len(self.__selectkey) <= idx:
+            raise("binarysearch find error index")
+        return self.__selectkey[idx]
         "*** END YOUR CODE HERE ***"
 
 
@@ -423,7 +482,13 @@ class InferenceModule:
         Return the probability P(noisyDistance | pacmanPosition, ghostPosition).
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        if ghostPosition == jailPosition and noisyDistance is None:
+            return 1.0
+
+        if ghostPosition == jailPosition or noisyDistance is None:
+            return 0.0
+
+        return busters.getObservationProbability(noisyDistance, manhattanDistance(pacmanPosition, ghostPosition))
         "*** END YOUR CODE HERE ***"
 
     def setGhostPosition(self, gameState, ghostPosition, index):
@@ -536,7 +601,11 @@ class ExactInference(InferenceModule):
         position is known.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        pacmanPos = gameState.getPacmanPosition()
+        jailPos = self.getJailPosition()
+        # Beliefs represent the probability that the ghost is at a particular location
+        for pos in self.allPositions:
+            self.beliefs[pos] *= self.getObservationProb(observation, pacmanPos, pos, jailPos)
         "*** END YOUR CODE HERE ***"
         self.beliefs.normalize()
     

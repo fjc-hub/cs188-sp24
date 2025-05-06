@@ -623,7 +623,25 @@ class ExactInference(InferenceModule):
         current position is known.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        # P(gameState, G[t], G[t+1]) = P(G[t+1] | gameState, G[t]) * P(gameState, G[t]) 
+        # Want to calculate Probability distribution of the Ghost's position at time t+1, namely P(gameState, G[t+1])
+        # First, calculate P(gameState, G[t], G[t+1]); Second, rule out G[t];
+        newBeliefs = DiscreteDistribution()
+
+        # enumerate all values in the domain of variable G[t]
+        # self.beliefs represents the Probability distribution P(gameState, G[t])
+        for oldPos in self.allPositions:
+            # self.getPositionDistribution() can acquire Probability distribution: P(G[t+1] | gameState, G[t])
+            # if you give it the Ghost's position at time t and gameState, namely Conditional Variables in above formula
+            # the domain of Unconditional variable G[t+1] are determined within the function itself
+            newPosDist = self.getPositionDistribution(gameState, oldPos)
+
+            # self.beliefs[oldPos] represents the Probability of P(gameState, oldPos)
+            # prob represents the Probability of P(newPos | gameState, oldPos)
+            # P(gameState, newPos) need to sum all probability P(gameState, Gt, newPos), Gt belongs to self.allPositions
+            for newPos, prob in newPosDist.items():
+                newBeliefs[newPos] += self.beliefs[oldPos] * prob
+        self.beliefs = newBeliefs
         "*** END YOUR CODE HERE ***"
 
     def getBeliefDistribution(self):

@@ -601,10 +601,24 @@ class ExactInference(InferenceModule):
         position is known.
         """
         "*** YOUR CODE HERE ***"
+        # elapse update phase of Forward Algorithm(a kind of Dynamic Programming), refer to https://inst.eecs.berkeley.edu/~cs188/sp24/assets/notes/cs188-sp24-note15.pdf
+        # G = ghost position, G{t} represents ghost position at time t; 
+        # O = observation, O{1..t} represents observition in HMM at time 1 to t
+        # general formulations: ① B(G{t}) = P(G{t} | O{1..t});     ② B'(G{t}) = P(G{t} | O{1..t-1})
+        # 
+        # Known: self.beliefs represents the B'(G{t+1});
+        #        self.allPositions represnts the domain of ghost postion(namely G);
+        # Target: by using Intermediate belief distribution(namely self.beliefs) acquired from elapseTime,
+        #         to infer exactly the probability distribution of G{t+1} given some Observations O{1..t}, namely B(G{t+1});
+        # Formulation: B(G{t+1}) proportional to P(O{t+1} | G{t+1})*B'(G{t+1})    # by Chain rule, detailed in above reference
+        #              must normalization before return the true probability distribution.
+        
+        # O = observation = noisyDistance;
         pacmanPos = gameState.getPacmanPosition()
         jailPos = self.getJailPosition()
-        # Beliefs represent the probability that the ghost is at a particular location
         for pos in self.allPositions:
+            # pos = potential ghostPosition at time t+1, namely G{t+1};  pacmanPos = 
+            # self.getObservationProb return P(noisyDistance | pacmanPos, pos), namely P(O{t+1} | G{t+1})
             self.beliefs[pos] *= self.getObservationProb(observation, pacmanPos, pos, jailPos)
         "*** END YOUR CODE HERE ***"
         self.beliefs.normalize()
@@ -623,6 +637,24 @@ class ExactInference(InferenceModule):
         current position is known.
         """
         "*** YOUR CODE HERE ***"
+        # elapse update phase of Forward Algorithm(a kind of Dynamic Programming), refer to https://inst.eecs.berkeley.edu/~cs188/sp24/assets/notes/cs188-sp24-note15.pdf
+        # G = ghost position, G{t} represents ghost position at time t; 
+        # O = observation, O{1..t} represents observition in HMM at time 1 to t
+        # general formulations: ① B(G{t}) = P(G{t} | O{1..t});     ② B'(G{t}) = P(G{t} | O{1..t-1})
+        # 
+        # Known: self.beliefs represents the B(G{t})=P(G{t} | O{1..t});  
+        #        self.allPositions represnts the domain of ghost postion(namely G);
+        # Target: infer exactly the Intermediate belief distribution of G{t+1} in Forward Algorithm, namely B'(G{t+1})=P(G{t+1} | O{1..t}); 
+        # Formulation: 
+        #       B'(G{t+1}) = P(G{t+1} | O{1..t})
+        #                  = ∑(Gt)[P(G{t+1}, Gt | O{1..t})]
+        #                  = ∑(Gt)[P(G{t+1} | O{1..t}, Gt) * P(Gt | O{1..t})]
+        #                  = ∑(Gt)[P(G{t+1} | O{1..t}, Gt) * P(Gt | O{1..t})]
+        #                  = ∑(Gt)[P(G{t+1} | O{1..t}, Gt) * B(Gt)]
+        #                  = ∑(Gt)[P(G{t+1} | Gt) * B(Gt)]      # using the conditional independence between parent node and child node in HMM(Bayes net)
+        # 
+        # namely: B'(G{t+1}) = ∑(Gt) P(G{t+1} | Gt) * self.beliefs[Gt]
+
         # P(gameState, G[t], G[t+1]) = P(G[t+1] | gameState, G[t]) * P(gameState, G[t]) 
         # Want to calculate Probability distribution of the Ghost's position at time t+1, namely P(gameState, G[t+1])
         # First, calculate P(gameState, G[t], G[t+1]); Second, rule out G[t];
@@ -631,14 +663,12 @@ class ExactInference(InferenceModule):
         # enumerate all values in the domain of variable G[t]
         # self.beliefs represents the Probability distribution P(gameState, G[t])
         for oldPos in self.allPositions:
-            # self.getPositionDistribution() can acquire Probability distribution: P(G[t+1] | gameState, G[t])
-            # if you give it the Ghost's position at time t and gameState, namely Conditional Variables in above formula
-            # the domain of Unconditional variable G[t+1] are determined within the function itself
+            # self.getPositionDistribution() can acquire Probability distribution: P(G[t+1] | G[t])
             newPosDist = self.getPositionDistribution(gameState, oldPos)
 
-            # self.beliefs[oldPos] represents the Probability of P(gameState, oldPos)
-            # prob represents the Probability of P(newPos | gameState, oldPos)
-            # P(gameState, newPos) need to sum all probability P(gameState, Gt, newPos), Gt belongs to self.allPositions
+            # oldPos = ghost position at time t;  newPos = ghost position at time t+1
+            # prob represents the Probability of P(newPos | oldPos) namely P(G{t+1} | Gt)
+            # self.beliefs[oldPos] represents B(oldPos) namely B(Gt)
             for newPos, prob in newPosDist.items():
                 newBeliefs[newPos] += self.beliefs[oldPos] * prob
         self.beliefs = newBeliefs

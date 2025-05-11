@@ -655,15 +655,9 @@ class ExactInference(InferenceModule):
         # 
         # namely: B'(G{t+1}) = ∑(Gt) P(G{t+1} | Gt) * self.beliefs[Gt]
 
-        # P(gameState, G[t], G[t+1]) = P(G[t+1] | gameState, G[t]) * P(gameState, G[t]) 
-        # Want to calculate Probability distribution of the Ghost's position at time t+1, namely P(gameState, G[t+1])
-        # First, calculate P(gameState, G[t], G[t+1]); Second, rule out G[t];
         newBeliefs = DiscreteDistribution()
-
-        # enumerate all values in the domain of variable G[t]
-        # self.beliefs represents the Probability distribution P(gameState, G[t])
         for oldPos in self.allPositions:
-            # self.getPositionDistribution() can acquire Probability distribution: P(G[t+1] | G[t])
+            # self.getPositionDistribution() can acquire Probability distribution: P(G{t+1} | G{t})
             newPosDist = self.getPositionDistribution(gameState, oldPos)
 
             # oldPos = ghost position at time t;  newPos = ghost position at time t+1
@@ -703,7 +697,15 @@ class ParticleFilter(InferenceModule):
         """
         self.particles = []
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        numParticle = self.numParticles
+        positions = self.legalPositions
+        num = numParticle // len(positions)
+        rem = numParticle % len(positions)
+        for pos in positions:
+            self.particles.extend([pos]*num)
+            if rem > 0:
+                self.particles.append(pos)
+                rem -= 1
         "*** END YOUR CODE HERE ***"
 
     def getBeliefDistribution(self):
@@ -715,7 +717,11 @@ class ParticleFilter(InferenceModule):
         This function should return a normalized distribution.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        self.beliefs = DiscreteDistribution()
+        for p in self.particles:
+            self.beliefs[p] += 1.0
+        self.beliefs.normalize()
+        return self.beliefs
         "*** END YOUR CODE HERE ***"
     
     ########### ########### ###########
@@ -735,7 +741,32 @@ class ParticleFilter(InferenceModule):
         the DiscreteDistribution may be useful.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        pacmanPos = gameState.getPacmanPosition()
+        jailPos = self.getJailPosition()
+        # calculate the weight sum of each particle
+        weighted = DiscreteDistribution()
+        for pos in self.particles:
+            # pos = potential ghost position at time t+1;  observation = observation at time t+1
+            # self.getObservationProb return the probability of P(O{t+1} | G{t+1})
+            weighted[pos] += self.getObservationProb(observation, pacmanPos, pos, jailPos)
+        if weighted.total() == 0:
+            self.initializeUniformly(gameState)
+            return
+
+        # resample new particles based on the probability distribution of weighted
+        weighted.normalize()
+        newBelief = DiscreteDistribution()
+        newParticles = []
+        for _ in range(len(self.particles)):
+            particle = weighted.sample()
+            newParticles.append(particle)
+            if particle not in newBelief:
+                newBelief[particle] = 1
+            else:
+                newBelief[particle] = newBelief[particle] + 1
+        newBelief.normalize()
+        self.beliefs = newBelief
+        self.particles = newParticles
         "*** END YOUR CODE HERE ***"
     
     ########### ########### ###########
@@ -748,6 +779,10 @@ class ParticleFilter(InferenceModule):
         gameState.
         """
         "*** YOUR CODE HERE ***"
-        raiseNotDefined()
+        newParticles = []
+        for oldPos in self.particles:
+            newPosDist = self.getPositionDistribution(gameState, oldPos)
+            newParticles.append(newPosDist.sample())
+        self.particles = newParticles
         "*** END YOUR CODE HERE ***"
 

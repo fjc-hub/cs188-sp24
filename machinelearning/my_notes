@@ -1,0 +1,41 @@
+Given two tensors in Pytorch:
+        t0 = tensor([[1, 1, 1],[1, 1, 1]])
+        t1 = tensor([[2, 2],[2, 2],[2, 2]])
+    then the contraction: tensordot(t0, t1, dims=([1,0],[0,1])) = tensor(12)
+    starting from tensordot(t0, t1, dims=([1],[0])) = tensor([[6, 6],[6, 6]]):
+        a_i_j = SUM_k{t0_i_k * t1_k_j}, k=0,1,2
+    then in tensordot(t0, t1, dims=([1,0],[0,1])), there are two sum
+        a_0_0 = SUM_k1{ SUM_k2{t0_k1_k2 * t1_k2_k1} }, k1=0,1,2. k2=0,1
+
+
+Increasing/Decreasing Learning Rate effects
+    too small => trainning slowly
+    too large => 
+        1.Oscillations around the optimum(Training may not converge, or takes a very long time)
+        2.Divergence(Loss increases without bound, often becomes NaN or infinity)
+            Example convex function:    Loss(θ)=L(θ)=x²  =>  ∇L(θ)=2θ
+            Using gradient descent:     θnew = θold - η * 2θold = θold * (1 - 2η)
+            Now observe:    
+                If η < 0.5: gradient descent will downhill with right direction of θ,
+                    updates θ for moving L(θ) toward convergence
+                If η > 0.5: step direction on Loss funcion(θold -> θnew) is fixed,
+                    θ will grow over time and get farther and farther away from optimal θ,
+                    and L(θ) will diverge forever
+
+
+Why if you keep making the network wider, the accuracy May gradually decline
+    1.Overfitting: A wider network has more parameters, which gives it 
+        more capacity to memorize the training data — even the noise features(特征),
+        it may cause the model to perform worse on Unseen data.
+        - Analogy: think of it like 'Memorizing' answers instead of 'Understanding' concept, 
+        A wider net might 'memorize' rather than 'learn'
+    2.If the network is too large relative to the amount of data, generalization gets worse
+
+
+Recommended values for your hyperparameters:
+    1. Hidden layer sizes: between 100 and 500.
+    2. Batch size: between 1 and 128. For Q2 and Q3,
+       we require that total size of the dataset be evenly divisible by the batch size.
+    3. Learning rate: between 0.0001 and 0.01.
+    4. Number of hidden layers: between 1 and 3,
+       It’s especially important that you start small here.

@@ -104,8 +104,11 @@ class RegressionModel(Module):
         # Initialize your model parameters here
         "*** YOUR CODE HERE ***"
         super().__init__()
-
-
+        n = 100
+        # layer1 shape: batch_size x n
+        self.layer1 = Linear(1, n, bias=True)
+        # layer2 shape: n x 1
+        self.layer2 = Linear(n, 1, bias=True)
 
     def forward(self, x):
         """
@@ -117,7 +120,12 @@ class RegressionModel(Module):
             A node with shape (batch_size x 1) containing predicted y-values
         """
         "*** YOUR CODE HERE ***"
-
+        # neural network forward pass:
+        #   x  => layer1 => layer2 =>  y
+        #  bx1 =>  1xn   =>  nx1   => bx1
+        h1 = relu(self.layer1(x))
+        y = self.layer2(h1)
+        return y 
     
     def get_loss(self, x, y):
         """
@@ -130,8 +138,8 @@ class RegressionModel(Module):
         Returns: a tensor of size 1 containing the loss
         """
         "*** YOUR CODE HERE ***"
- 
-  
+        predict_y = self.forward(x)
+        return mse_loss(predict_y, y)
 
     def train(self, dataset):
         """
@@ -148,14 +156,31 @@ class RegressionModel(Module):
             
         """
         "*** YOUR CODE HERE ***"
-
-
-            
-
-
-
-
-
+        dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
+        params = self.parameters()
+        optimizer = optim.Adam(params, lr=0.003)
+        done = False
+        target_loss = 0.02
+        while not done:
+            acc_loss, cnt_loss = 0, 0
+            # train over and over again on the data set
+            for data in dataloader:
+                feature = data['x']
+                label = data['label']
+                # 1.Forward pass: Compute predictions and loss
+                loss = self.get_loss(feature, label)
+                # 2.Backward pass: Compute gradients
+                loss.backward()
+                # 3.Step: Update parameters
+                optimizer.step()
+                # 4.Zero gradients: Reset gradients before next batch
+                optimizer.zero_grad()
+                # 5.accumulate loss value
+                acc_loss += loss.item()
+                cnt_loss += 1
+            # check if the target loss has been achieved
+            if acc_loss / cnt_loss <= target_loss:
+                done = True
 
 
 class DigitClassificationModel(Module):
@@ -178,8 +203,20 @@ class DigitClassificationModel(Module):
         input_size = 28 * 28
         output_size = 10
         "*** YOUR CODE HERE ***"
+        # define all hyperparameters
+        # trial 1, pass rate: 4/5
+        # self.learning_rate = 0.003
+        # self.batch_size = 16
+        # self.hidden1_size = 200
 
+        # trial 2, pass rate: 5/5
+        self.learning_rate = 0.003
+        self.batch_size = 64  # accelerate trainning
+        self.hidden1_size = 200
 
+        # define neural network
+        self.layer1 = Linear(input_size, self.hidden1_size, bias=True)
+        self.layer2 = Linear(self.hidden1_size, output_size, bias=True)
 
     def run(self, x):
         """
@@ -196,7 +233,9 @@ class DigitClassificationModel(Module):
                 (also called logits)
         """
         """ YOUR CODE HERE """
-
+        h1 = relu(self.layer1(x))
+        y = self.layer2(h1)
+        return y
 
     def get_loss(self, x, y):
         """
@@ -212,15 +251,28 @@ class DigitClassificationModel(Module):
         Returns: a loss tensor
         """
         """ YOUR CODE HERE """
-
-        
+        predict_y = self.run(x)
+        return cross_entropy(predict_y, y)
 
     def train(self, dataset):
         """
         Trains the model.
         """
         """ YOUR CODE HERE """
-
+        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        epochs = 0
+        target_accuracy = 0.975
+        while dataset.get_validation_accuracy() < target_accuracy:
+            for data in dataloader:
+                feature = data['x']
+                label = data['label']
+                loss = self.get_loss(feature, label)
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+            epochs += 1
+        print(f"trainning {epochs} epochs")
 
 
 class LanguageIDModel(Module):
@@ -240,8 +292,29 @@ class LanguageIDModel(Module):
         self.languages = ["English", "Spanish", "Finnish", "Dutch", "Polish"]
         super(LanguageIDModel, self).__init__()
         "*** YOUR CODE HERE ***"
-        # Initialize your model parameters here
+        # define all hyperparameters
+        # trial 1, pass_rate: 10/10, average_epoch: 112/10=11.2
+        self.learning_rate = 0.003
+        self.batch_size = 64
+        self.hidden1_size = 200 # The hidden size d should be sufficiently large
+        self.target_accuracy = 0.85
 
+        # trial 2, pass_rate: 5/5, average_epoch: 106/5=21.2
+        # self.learning_rate = 0.003
+        # self.batch_size = 128   # Larger batches provide less weight/parameter updates
+        # self.hidden1_size = 200
+        # self.target_accuracy = 0.85
+
+        # trial 3, pass_rate: 5/5, average_epoch: 99+306+136+105+854
+        # self.learning_rate = 0.001
+        # self.batch_size = 128
+        # self.hidden1_size = 200
+        # self.target_accuracy = 0.85
+
+        # Initialize your model parameters here
+        self.layer1 = Linear(self.num_chars, self.hidden1_size, bias=True)
+        self.layer2 = Linear(self.hidden1_size, self.hidden1_size, bias=True)
+        self.layer3 = Linear(self.hidden1_size, len(self.languages), bias=True)
 
     def run(self, xs):
         """
@@ -258,6 +331,7 @@ class LanguageIDModel(Module):
         index 7 reflects the fact that "cat" is the last word in the batch, and
         the index 0 reflects the fact that the letter "a" is the inital (0th)
         letter of our combined alphabet for this task.
+        xs[i] represents i-th character of each word
 
         Your model should use a Recurrent Neural Network to summarize the list
         `xs` into a single tensor of shape (batch_size x hidden_size), for your
@@ -273,7 +347,15 @@ class LanguageIDModel(Module):
                 (also called logits)
         """
         "*** YOUR CODE HERE ***"
-
+        # RNN: h_i+1 = x_i * W_1 + h_i * W_2,  i >= 1
+        h = relu(self.layer1(xs[0]))  # h_1 = relu(x_0 * W_1)
+        for x in xs[1:]:
+            # x shape: batch_size x self.num_chars
+            # layer1 shape: self.num_chars x self.hidden1_size
+            # h shape: batch_size x self.hidden1_size
+            # layer2 shape: self.hidden1_size x self.hidden1_size
+            h = relu(self.layer1(x) + self.layer2(h))
+        return self.layer3(h)
     
     def get_loss(self, xs, y):
         """
@@ -290,7 +372,8 @@ class LanguageIDModel(Module):
         Returns: a loss node
         """
         "*** YOUR CODE HERE ***"
-
+        predict_y = self.run(xs)
+        return cross_entropy(predict_y, y)
 
     def train(self, dataset):
         """
@@ -307,7 +390,20 @@ class LanguageIDModel(Module):
         For more information, look at the pytorch documentation of torch.movedim()
         """
         "*** YOUR CODE HERE ***"
-
+        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        epochs = 0
+        while dataset.get_validation_accuracy() < self.target_accuracy:
+            for data in dataloader:
+                feature = data['x']
+                label = data['label']
+                new_feature = movedim(feature, 0, 1)
+                loss = self.get_loss(new_feature, label)
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+            epochs += 1
+            print(f"trainning {epochs} epochs")
         
 
 def Convolve(input: tensor, weight: tensor):
@@ -325,10 +421,17 @@ def Convolve(input: tensor, weight: tensor):
     """
     input_tensor_dimensions = input.shape
     weight_dimensions = weight.shape
-    Output_Tensor = tensor(())
     "*** YOUR CODE HERE ***"
-
-    
+    out_h = input_tensor_dimensions[0] - weight_dimensions[0] + 1
+    out_w = input_tensor_dimensions[1] - weight_dimensions[1] + 1
+    Output_Tensor = empty((out_h, out_w))
+    for i in range(out_h):
+        for j in range(out_w):
+            Output_Tensor[i, j] = tensordot(
+                input[i:i+weight_dimensions[0], j:j+weight_dimensions[1]], 
+                weight, 
+                dims=([0,1],[0,1])
+            )
     "*** End Code ***"
     return Output_Tensor
 
@@ -341,19 +444,23 @@ class DigitConvolutionalModel(Module):
     This class is a convolutational model which has already been trained on MNIST.
     if Convolve() has been correctly implemented, this model should be able to achieve a high accuracy
     on the mnist dataset given the pretrained weights.
-
-
     """
-    
-
     def __init__(self):
         # Initialize your model parameters here
         super().__init__()
         output_size = 10
-
         self.convolution_weights = Parameter(ones((3, 3)))
         """ YOUR CODE HERE """
-
+        # define all hyperparameters
+        self.learning_rate = 0.003
+        self.batch_size = 64
+        self.hidden1_size = 200
+        self.target_accuracy = 0.85
+        # define neural network
+        # Convolution: You use a 3x3 kernel, stride 1, no padding
+        #              Output size per dimension: 28 - 3 + 1 = 26
+        self.layer1 = Linear(26*26, self.hidden1_size, bias=True)
+        self.layer2 = Linear(self.hidden1_size, output_size, bias=True)
 
     def run(self, x):
         """
@@ -364,8 +471,9 @@ class DigitConvolutionalModel(Module):
         x = stack(list(map(lambda sample: Convolve(sample, self.convolution_weights), x)))
         x = x.flatten(start_dim=1)
         """ YOUR CODE HERE """
-
- 
+        h1 = relu(self.layer1(x))
+        y = self.layer2(h1)
+        return y
 
     def get_loss(self, x, y):
         """
@@ -381,12 +489,24 @@ class DigitConvolutionalModel(Module):
         Returns: a loss tensor
         """
         """ YOUR CODE HERE """
-
+        predict_y = self.run(x)
+        return cross_entropy(predict_y, y)
         
-
     def train(self, dataset):
         """
         Trains the model.
         """
         """ YOUR CODE HERE """
- 
+        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        epochs = 0
+        while dataset.get_validation_accuracy() < self.target_accuracy:
+            for data in dataloader:
+                feature = data['x']
+                label = data['label']
+                loss = self.get_loss(feature, label)
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+            epochs += 1
+            print(f"trainning {epochs} epochs")
